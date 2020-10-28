@@ -1,5 +1,30 @@
+*****
+pyC14
+*****
 
 
+A python tool for parameter inference of modern C14 data.
+#########################################################
 
-put to tool:
-    function from list of dict to dict of list
+The python tool can be used to use the Bayesian inference of C14 data.
+
+Dependencies
+============
+
+* Python versions: 3.6-3.8
+* numpy: 1.18
+* scipy: 1.4
+* pandas: 0.25
+* emcee: 3.0
+* arviz: 0.7 
+* matplotlib
+* xlrd
+
+Installing
+==========
+
+::
+  In the pyC14 folder run:
+   $ pip install .
+
+
