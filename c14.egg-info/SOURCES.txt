@@ -2,11 +2,14 @@
 README
 setup.py
 c14/__init__.py
+c14/corner.py
 c14/livermodels.py
 c14/musclemodels.py
 c14/optimize.py
 c14/plotting.py
+c14/plotting_bokeh.py
 c14/tools.py
+c14/utils.py
 c14.egg-info/PKG-INFO
 c14.egg-info/SOURCES.txt
 c14.egg-info/dependency_links.txt

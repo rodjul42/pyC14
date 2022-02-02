@@ -399,9 +399,10 @@ class x2POP_Gaus(model_base):
 
 
     def calc_initial_parameters(self):
-        min_b =  max(1e-7,self.beta_mean-3*self.beta_width)
-        betas = np.linspace(min_b,self.beta_mean+3*self.beta_width,self.bins)
-        self.mask_betas = betas>limit_rate[1]
+        min_b =  max(limit_rate[0],self.beta_mean-3*self.beta_width)
+        max_b =  min(limit_rate[1],self.beta_mean+3*self.beta_width)
+        betas = np.linspace(min_b,max_b,self.bins)
+        self.mask_betas = betas>10
         delta = betas[1]-betas[0]
         intb=betas+delta
         inta=betas-delta
@@ -428,5 +429,5 @@ class x2POP_Gaus(model_base):
 
 #models_list = [N, A, x2POP, S, S2, SB, S2B, Lin, Lin2,LinB,LinB2,x2POP_Gaus]
 
-models_list = [N, A, x2POP, SB, S2B, LinB]
+models_list = [N, A, x2POP, SB, S2B, LinB,x2POP_Gaus]
 

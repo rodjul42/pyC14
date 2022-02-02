@@ -1,100 +1,10 @@
 import numpy as np
 import pandas as pd
 import collections
-import arviz as az
 import logging
 logger =  logging.getLogger(__name__)
 
-def find_point_estimate(chains,model):
-    rands,chain,lnprob,lnprob_i = chains
-    max_sample = np.unravel_index(np.argmax(lnprob, axis=None), lnprob.shape)
-    return {n:v for v,n in zip(chain[max_sample],model.parameter_names)}
 
-def convert_to_arviz(chains,model,burnin,remove_stuck=False,iparas_time=None,phy_space=False):
-    rands,chain,lnprob,lnprob_i = chains
-    para_names = model.parameter_names
-    if remove_stuck:
-        old_number_chains = lnprob.shape[0] 
-        chain_mask = np.where(lnprob[:,burnin:].min(axis=1)>-1e10)[0]
-        chain = chain[chain_mask,burnin:]
-        lnprob_i = lnprob_i[burnin:,chain_mask]
-        lnprob = lnprob[chain_mask,burnin:]
-        print(old_number_chains - len(chain_mask),' chains are stuck')
-    else:
-        chain = chain[:,burnin:]
-        lnprob_i = lnprob_i[burnin:,:]
-        lnprob = lnprob[:,burnin:]
-
-    if iparas_time is not None:
-        chain_s = chain.shape
-        iparas_name = list(model.calc_implicit_parameters(iparas_time).keys())
-        chain_woth_ip = np.zeros((chain_s[0],chain_s[1],chain_s[2]+len(iparas_name)))
-        for n_chain in range(chain_s[0]):
-            for n_sample in range(chain_s[1]):
-                model.set_parameters_fit_array(chain[n_chain,n_sample],mode='bayes')
-                chain_woth_ip[n_chain,n_sample,chain_s[2]:] = [model.calc_implicit_parameters(iparas_time)[name] for name in iparas_name]
-                sample_stats = {'log_likelihood':np.transpose(lnprob_i,axes=(1,0,2)),'loglike_values':lnprob}
-
-        chain_dict = {name: chain[:,:,i] for i,name in enumerate(model.parameter_names) }
-        chain_dict_phy = model.transform_fit_to_physical(chain_dict,mode='bayes')
-        chain = np.transpose(np.array([chain_dict_phy[name] for name in model.parameter_names]),axes=(1,2,0))
-        chain_woth_ip[:,:,:chain_s[2]] = chain
-        
-        return az.from_dict(posterior={'a':chain_woth_ip},sample_stats=sample_stats,dims={'a':['ac']},coords ={'ac':list(para_names)+iparas_name}),list(para_names)+iparas_name
-    else:
-        if phy_space:
-            chain_dict = {name: chain[:,:,i] for i,name in enumerate(model.parameter_names) }
-            chain_dict_phy = model.transform_fit_to_physical(chain_dict,mode='bayes')
-            chain = np.transpose(np.array([chain_dict_phy[name] for name in model.parameter_names]),axes=(1,2,0))
-        sample_stats = {'log_likelihood':np.transpose(lnprob_i,axes=(1,0,2)),'loglike_values':lnprob}
-        return az.from_dict(posterior={'a':chain},sample_stats=sample_stats,dims={'a':['ac']},coords ={'ac':para_names}),list(para_names)
-
-
-def run_convergence_checks(az_data):
-    if az_data.posterior.dims['chain'] == 1:
-        msg = ("Only one chain was sampled, this makes it impossible to "
-               "run some convergence checks")
-        return [msg]
-
-    from arviz import rhat, ess
-
-    ess = ess(az_data)
-    rhat = rhat(az_data)
-       
-    warnings = []
-    rhat_max = float(rhat.max()['a'].values)
-    
-    if rhat_max > 1.4:
-        msg = ("ERROR: The rhat statistic is larger than 1.4 for some "
-               "parameters. The sampler did not converge.")
-        warnings.append(msg)
-    elif rhat_max > 1.2:
-        msg = ("WARN: The rhat statistic is larger than 1.2 for some "
-               "parameters.")
-        warnings.append(msg)
-    elif rhat_max > 1.05:
-        msg = ("INFO: The rhat statistic is larger than 1.05 for some "
-               "parameters. This indicates slight problems during "
-               "sampling.")
-        warnings.append(msg)
-
-    eff_min = float(ess.min()['a'].values)
-    n_samples =  az_data.posterior.dims['draw'] * az_data.posterior.dims['chain']
-    if eff_min < 200 and n_samples >= 500:
-        msg = ("ERROR: The estimated number of effective samples is smaller than "
-               "200 for some parameters.")
-        warnings.append(msg)
-    elif eff_min / n_samples < 0.1:
-        msg = ("WARN: The number of effective samples is smaller than "
-               "10% for some parameters.")
-        warnings.append(msg)
-    elif eff_min / n_samples < 0.25:
-        msg = ("INFO: The number of effective samples is smaller than "
-               "25% for some parameters.")
-
-        warnings.append(msg)
-
-    return warnings
 
 class ImplicitParametersOutOfRange(Exception):
     def __init__(self, message, iparas):
@@ -103,6 +13,17 @@ class ImplicitParametersOutOfRange(Exception):
     def __str__(self):
         return self.message
 
+class FailedToCalulatePopulation(Exception):
+    def __init__(self, message):
+        self.message = message
+    def __str__(self):
+        return self.message
+
+class NonFiniteValuesinIntegrate(Exception):
+    def __init__(self):
+        pass
+    def __str__(self):
+        return "Non Finite Values in Integrate of c14"
 
 def col_name_levels(df, name):
     ''' get levels from level 'name' '''
@@ -138,6 +59,28 @@ def listofdict_to_dictoflist(listofdict):
     for dic in listofdict:
         for n in dic.keys():
             dictoflist[n].append(dic[n])
+    return dictoflist
+
+def listofdict_to_dictofarray(listofdict):
+    dictoflist = {n:[] for n in listofdict[0].keys()}
+    for dic in listofdict:
+        for n in dic.keys():
+            dictoflist[n].append(dic[n])
+    for n in dictoflist.keys():
+        dictoflist[n] = np.array(dictoflist[n])
+    return dictoflist
+
+
+def listofdict_to_dictofarray_f(listofdict,i):
+    dictoflist = {n:[] for n in listofdict[0].keys()}
+    for dic in listofdict:
+        for n in dic.keys():
+            if isinstance( dic[n], (collections.Sequence, np.ndarray)):
+                dictoflist[n].append(dic[n][i])
+            else:
+                dictoflist[n].append(dic[n])
+    for n in dictoflist.keys():
+        dictoflist[n] = np.array(dictoflist[n])
     return dictoflist
 
 def read_xls(path, useasindex=None):
@@ -178,15 +121,15 @@ class RungeKutta(OdeSolver):
     E = NotImplemented
     P = NotImplemented
     order = NotImplemented
+    error_estimator_order = NotImplemented
     n_stages = NotImplemented
 
     def __init__(self, fun, t0, y0, t_bound, max_step=np.inf,
-                 rtol=1e-3, atol=1e-6, min_step=0, vectorized=False,
+                 rtol=1e-3, atol=1e-6, vectorized=False,
                  first_step=None, **extraneous):
         warn_extraneous(extraneous)
         super(RungeKutta, self).__init__(fun, t0, y0, t_bound, vectorized,
                                          support_complex=True)
-        self.min_step_user = min_step
         self.y_old = None
         self.max_step = validate_max_step(max_step)
         self.rtol, self.atol = validate_tol(rtol, atol, self.n)
@@ -194,10 +137,18 @@ class RungeKutta(OdeSolver):
         if first_step is None:
             self.h_abs = select_initial_step(
                 self.fun, self.t, self.y, self.f, self.direction,
-                self.order, self.rtol, self.atol)
+                self.error_estimator_order, self.rtol, self.atol)
         else:
             self.h_abs = validate_first_step(first_step, t0, t_bound)
         self.K = np.empty((self.n_stages + 1, self.n), dtype=self.y.dtype)
+        self.error_exponent = -1 / (self.error_estimator_order + 1)
+        self.h_previous = None
+
+    def _estimate_error(self, K, h):
+        return np.dot(K.T, self.E) * h
+
+    def _estimate_error_norm(self, K, h, scale):
+        return norm(self._estimate_error(K, h) / scale)
 
     def _step_impl(self):
         t = self.t
@@ -216,8 +167,8 @@ class RungeKutta(OdeSolver):
         else:
             h_abs = self.h_abs
 
-        order = self.order
         step_accepted = False
+        step_rejected = False
 
         while not step_accepted:
             if h_abs < min_step:
@@ -232,25 +183,30 @@ class RungeKutta(OdeSolver):
             h = t_new - t
             h_abs = np.abs(h)
 
-            y_new, f_new, error = rk_step(self.fun, t, y, self.f, h, self.A,
-                                          self.B, self.C, self.E, self.K)
+            y_new, f_new = rk_step(self.fun, t, y, self.f, h, self.A,
+                                   self.B, self.C, self.K)
             scale = atol + np.maximum(np.abs(y), np.abs(y_new)) * rtol
-            error_norm = norm(error / scale)
-            if error_norm == 0.0:
-                h_abs *= MAX_FACTOR
-                step_accepted = True
-            elif error_norm < 1:
-                h_abs *= min(MAX_FACTOR,
-                             max(1, SAFETY * error_norm ** (-1 / (order + 1))))
+            error_norm = self._estimate_error_norm(self.K, h, scale)
+
+            if error_norm < 1:
+                if error_norm == 0:
+                    factor = MAX_FACTOR
+                else:
+                    factor = min(MAX_FACTOR,
+                                 SAFETY * error_norm ** self.error_exponent)
+
+                if step_rejected:
+                    factor = min(1, factor)
+
+                h_abs *= factor
+
                 step_accepted = True
             else:
-                if (h_abs<self.min_step_user):
-                    step_accepted = True
-                    logger.debug("nmin step size reached")
-                else:
-                    h_abs *= max(MIN_FACTOR,
-                             SAFETY * error_norm ** (-1 / (order + 1)))
+                h_abs *= max(MIN_FACTOR,
+                             SAFETY * error_norm ** self.error_exponent)
+                step_rejected = True
 
+        self.h_previous = h
         self.y_old = y
 
         self.t = t_new
@@ -264,6 +220,7 @@ class RungeKutta(OdeSolver):
     def _dense_output_impl(self):
         Q = self.K.T.dot(self.P)
         return RkDenseOutput(self.t_old, self.t, self.y_old, Q)
+
 
 class RK45(RungeKutta):
     order = 4

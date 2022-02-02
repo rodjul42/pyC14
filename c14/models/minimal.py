@@ -36,6 +36,12 @@ class NOT(model_base):
 
 
 class POP1(model_base):
+    populations_DNA = {'cells':1}
+    m_types = ['mean']
+    populations = ['cells']
+    populations_m = {'mean':populations}
+    iparas = []
+
     def __init__(self):
         default_parameters = {'lambda_': 0.5}
         limit = {i: global_limit for i in default_parameters.keys()}
@@ -59,7 +65,7 @@ class POP1(model_base):
 
     def calc_implicit_parameters(self, t):
         delta = self.lambda_
-        return {'delta': delta}
+        return {'delta': delta,'cells':1}
 
     def measurement_model(self, result_sim, data):
         return result_sim['cells']

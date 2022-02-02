@@ -5,7 +5,7 @@ import pandas as pd
 import pkg_resources
 from scipy import interp
 from scipy.interpolate import interp1d, UnivariateSpline
-from ..tools import  ImplicitParametersOutOfRange, trans_arcsin, trans_sin
+from ..tools import  ImplicitParametersOutOfRange,FailedToCalulatePopulation, trans_arcsin, trans_sin
 
 logger = logging.getLogger(__name__)
 
@@ -53,17 +53,17 @@ class model_base:
             self.__dict__['logparas']
             self.logparas=list(self.logparas)
         except KeyError:
-            logger.error("Default logparas missing. ")
+            logger.warning("Default logparas missing. ")
             try:
                 linparas = self.__dict__['linparas']
                 self.logparas=[]
                 for para in default_parameters:
                     if para not in linparas:
                         self.logparas.append(para)
-                logger.error("linparas found -> assuming all other are logparas. ")
+                logger.warning("linparas found -> assuming all other are logparas. ")
             except KeyError:
                 self.logparas=list(default_parameters.keys())
-                logger.error("No linparas -> assuming all are logparas. ")
+                logger.warning("No linparas -> assuming all are logparas. ")
                 
 
         #if no linparas assume no linparas
@@ -78,7 +78,7 @@ class model_base:
         try:
             default_parameters['sigma']
         except KeyError:
-            logger.error("Default parameters missing sigma added automatikcally with limits 0,0.2")
+            logger.warning("Default parameters missing sigma added automatikcally with limits 0,0.2")
             default_parameters['sigma'] = 0.1
             limit['sigma'] = (0,0.2)
             error['sigma'] = 0.05
@@ -88,7 +88,7 @@ class model_base:
         self.set_error(error)
         self.set_limit(limit)
         if not self.set_parameters_phy(default_parameters.copy()):
-            logger.error("Default parameters are outside of limits")
+            logger.warning("Default parameters are outside of limits")
             self.set_parameters_phy(default_parameters.copy(),ignore_physics=True) 
         self.parameter_names = list(list(default_parameters.keys()))
         self.nparas = len(self.parameter_names)
@@ -130,6 +130,9 @@ class model_base:
         C_init = pd.DataFrame(self.Catm.lin(Dbirth)[:, np.newaxis]*np.ones(self.nvars), columns=self.var_names, index=idx)
         return C_init
 
+    def calc_prior(self):
+        return 1.0
+    
     def rhs(self, t, y):
         raise NotImplementedError
 
@@ -183,6 +186,16 @@ class model_base:
         
 
     def set_parameters_phy(self, p_phy, ignore_physics=False,mode='freq'):
+        self.__dict__.update(p_phy)
+        try:
+            self.calc_initial_parameters()
+        except ImplicitParametersOutOfRange as e:
+            logging.debug(e)
+            if not ignore_physics:
+                return False
+        except FailedToCalulatePopulation as e:
+            logging.debug(e)
+            return False
         if mode=='freq':
             try:
                 p_phy['sigma']
@@ -192,18 +205,17 @@ class model_base:
         if not ignore_physics:
             if not self.check_limit(p_phy):
                 return False
-        self.__dict__.update(p_phy)
         if not ignore_physics:
             try:
                 self.calc_implicit_parameters(0)
                 self.calc_implicit_parameters(self.check_max_age)
             except ValueError as e:
-                logging.info(e)
+                logging.debug(e)
                 return False
             except ImplicitParametersOutOfRange as e:
-                logging.info(e)
+                logging.debug(e)
                 return False
-        self.calc_initial_parameters()
+        
         return True
 
     def set_parameters_fit(self, p_fit, ignore_physics=False,mode='freq'):
@@ -238,9 +250,46 @@ class model_base:
     def calc_initial_parameters(self):
         return
     
+    
     def copy(self):
         return deepcopy(self)
 
     def bins_to_value(self,sol_res,d_len,t_len,Dcoll):
         return sol_res
 
+class TEST(model_base):
+    populations_DNA = {'cells':1}
+    m_types = ['mean']
+    populations = ['cells']
+    populations_m = {'mean':populations}
+    iparas = []
+
+    def __init__(self):
+        default_parameters = {'lambda_': 0.5,'sigma':0.1}
+        self.linparas = ['sigma']
+        self.logparas = ['lambda_']
+        limit = {i: (1e-5,10) for i in default_parameters.keys()}
+        self.Catm = Catm(delay=1)
+        model_base.__init__(self, var_names=['cells'],
+                            default_parameters=default_parameters,
+                            error={i: 0.5 for i in
+                                   default_parameters.keys()},
+                            limit=limit)
+
+
+
+    def rhs(self, t, y):
+        M = np.reshape(y, (self.nvars, -1))
+        M_new = np.zeros_like(M)
+
+
+        M_new[self.cells] = self.lambda_ - M[self.cells] 
+
+        return M_new.ravel()
+
+    def calc_implicit_parameters(self, t):
+        delta = self.lambda_
+        return {'delta': delta,'cells':1}
+
+    def measurement_model(self, result_sim, data):
+        return result_sim['cells']

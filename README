@@ -26,5 +26,3 @@ Installing
 ::
   In the pyC14 folder run:
    $ pip install .
-
-

@@ -32,15 +32,15 @@ class visualisze():
         self.data = data
 
         if self.data is not None:
+            maxage=np.max(self.data.df['age'])
             self.Dbirth_data = self.data.Dbirth
-            self.t_eval_data = np.arange(0, age, step_size)
-            self.span_data = (0, age)
+            self.t_eval_data = np.arange(0, maxage+step_size/10, step_size)
+            self.span_data = (0, self.t_eval_data[-1])
             self.N_data = len(self.data.Dbirth)
             self.C_init_data = self.model.gen_init(self.data.Dbirth)
 
     def odeint(self):
         self.model.set_Dbirth(self.Dbirth)
-        self.M_new = np.zeros(self.C_init.shape)
         if self.step_size is None:
             sol = sp.integrate.solve_ivp(
                     fun=self.model.rhs,
@@ -69,7 +69,6 @@ class visualisze():
 
         if self.data is not None:
             self.model.set_Dbirth(self.Dbirth_data)
-            self.M_new = np.zeros(self.C_init_data.shape)
             if self.step_size is None:
                 sol = sp.integrate.solve_ivp(
                         fun=self.model.rhs,
@@ -94,8 +93,10 @@ class visualisze():
         else:
             return self.solpd
 
-    def plot_parameter(self, parameters=None, errors=None, alpha=0.1,
-                       axis=None, log=False, nonlog=None, no_plot=[]):
+    def plot_parameter(self, parameters_phy=None, errors=None, alpha=0.1,
+                       axis=None, log=False, nonlog=None, no_plot=[],plot_list=None,NUM=0):
+        
+
         if axis is None:
             axis = plt.gca()
 
@@ -106,10 +107,10 @@ class visualisze():
         else:
             nonlog = []
 
-        if parameters is None:
+        if parameters_phy is None:
             plot_error = False
         else:
-            self.model.set_parameters_fit(parameters)
+            self.model.set_parameters_phy(parameters_phy)
             if errors is not None:
                 plot_error = True
             else:
@@ -118,7 +119,12 @@ class visualisze():
         t_start = self.t_eval[0]
         t_end = self.t_eval[-1]
         paras_colors = dict()
-        for p_name in self.model.parameter_names:
+
+        if plot_list is None:
+            plot_list_tmp = self.model.parameter_names
+        else:
+            plot_list_tmp = list(set(self.model.parameter_names) & set(plot_list)) 
+        for p_name in plot_list_tmp:
             if p_name in no_plot:
                 continue
             p = self.model.__dict__[p_name]
@@ -138,10 +144,17 @@ class visualisze():
         iparas_t = self.t_eval[ip_time_idx]
         iparas_names = list(iparas.keys())
         iparas_colors = dict()
-        for p_name in iparas_names:
-            if p_name in no_plot:
+
+        if plot_list is None:
+            plot_list_tmp = iparas_names
+        else:
+            plot_list_tmp = list(set(iparas_names) & set(plot_list)) 
+        for p_name in plot_list_tmp:
+            if p_name in no_plot  :
                 continue
             p = iparas[p_name]
+            if isinstance(p, (list, tuple, np.ndarray)):
+                p = np.array(p)[:,NUM]
             if p_name in nonlog:
                 lines = axis.plot([t_end+1, t_end+2], [p[0], p[-1]],
                                   label=p_name, ls='--', zorder=5)
@@ -342,7 +355,7 @@ class visualisze():
         df.columns.name = 'parameter'
         return df.reindex(sorted(df.columns), axis=1)
 
-    def plot_generic(self, variables=None, plot_D14C=True, figure=None,
+    def plot_generic(self, variables=None, plot_D14C=True, axs=None,
                      cmap=None, sm=None):
         try:
             self.solpd
@@ -355,10 +368,13 @@ class visualisze():
         else:
             nvars = len(variables)
         plots = nvars
-        if figure is None:
+        if axs is None:
             figure = plt.figure(figsize=(8, 3*plots))
-        shape = (plots, 1)
-        axies = {var: plt.subplot2grid(shape, (var_i, 0))
+            shape = (plots, 1)
+            axies = {var: plt.subplot2grid(shape, (var_i, 0))
+                 for var_i, var in enumerate(variables)}
+        else:
+            axies = {var: axs[var_i]
                  for var_i, var in enumerate(variables)}
 
         if sm is None:
@@ -394,7 +410,7 @@ class visualisze():
         return axies, sm
 
     def plot_delta(self, optimizer, parameters, axis=None, sm=None, cmap=None,
-                   marker=None):
+                   marker=None,mode='freq'):
         if axis is None:
             axis = plt.gca()
 
@@ -411,7 +427,7 @@ class visualisze():
         divider = make_axes_locatable(axis)
         cax = divider.append_axes(position='right', size='2%', pad=0.1)
         axis.scatter(data.Dbirth,
-                     optimizer.calc_sim_data_dict(parameters) - data.d14C,
+                     optimizer.calc_sim_data_dict(parameters,mode=mode) - data.d14C,
                      c=data.Dcoll, edgecolor='black')
         axis.set_xlabel(r'Birth date')
         axis.set_ylabel(r'$\Delta14C_{{Model}} - \Delta14C_{{Data}} $')
@@ -419,7 +435,7 @@ class visualisze():
         return sm
 
     def plot_data_measurment(self, optimizer, parameters, axis=None, sm=None, cmap=None,
-                   marker1='.' ,marker2='.',size1=20,size2=20,color=None):
+                   marker1='.' ,marker2='.',size1=20,size2=20,color=None,mode='bayes'):
         if axis is None:
             axis = plt.gca()
 
@@ -436,7 +452,7 @@ class visualisze():
             cax = divider.append_axes(position='right', size='2%', pad=0.1)
             plt.colorbar(sm, ax=axis, cax=cax)
 
-        simd= optimizer.calc_sim_data_dict(parameters)
+        simd= optimizer.calc_sim_data_dict(parameters,mode=mode)
         #axis.scatter(data.Dbirth, data.d14C, c=sm.to_rgba(data.Dcoll), edgecolor='black',marker=marker1,zorder=3,s=size1)
         axis.scatter(data.Dbirth, data.d14C, c=sm.to_rgba(data.Dcoll), edgecolor=sm.to_rgba(data.Dcoll),marker=marker1,zorder=3,s=size1)
         axis.scatter(data.Dbirth,simd , color=sm.to_rgba(data.Dcoll), edgecolor=sm.to_rgba(data.Dcoll),marker=marker2,zorder=2,s=size2)
@@ -630,3 +646,7 @@ class visualisze():
                 except IndexError:
                     break
         return f
+
+
+
+

@@ -148,6 +148,18 @@ class R(Hepatocyte):
                             error=error,
                             limit=limit)
 
+    def calc_turnover_and_flow(self,t):
+        ip = self.calc_implicit_parameters(t)
+        t2n = self.delta2 + self.kappa24 + ip['r2']
+        t4n = self.delta4 + self.kappa42 + ip['r4']
+        N_total = 1/(2-self.ploidy(t))
+        N2 = self.ploidy(t)    *N_total
+        N4 = (1-self.ploidy(t))*N_total
+        f2n = self.kappa42*N4*2 + ip['r2']*N2*2
+        f4n = self.kappa24*N2 +   ip['r4']*N4*2
+        return {'t2n':t2n,'t4n':t4n,'f2n':f2n,'f4n':f4n}
+
+
     def calc_implicit_parameters(self, t):
         # make explicit parameters local
         kappa24 = self.kappa24
@@ -262,6 +274,11 @@ class POP2(POP1q):
 
     def measurement_model(self, result_sim, data):
         return self.f*result_sim['cells1'] + (1-self.f)*result_sim['cells2']
+
+
+
+
+
 
 
 models_list = [R, POP1q, POP1,POP2]
