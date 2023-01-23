@@ -3,3 +3,8 @@ build/
 **/__pycache__/
 **/.vscode/
 .swp
+*.o
+*.so
+*wrap.cxx
+*Makefile
+c14/models/models_c/heart_c.py

@@ -77,8 +77,7 @@ def corner_R(chain,parameter_names=None,point_estimate=None,rename=None,kde=True
                 if namex in logparas:
                     ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
                     ticks = ax.get_xticks()
-                    if len(ticks)>7:
-                        ax.xaxis.set_major_locator(plt.MultipleLocator(2.0))
+                    ax.set_xticks(ticks)
                     ax.set_xticklabels([r"$10^{"+str(int(i))+r"}$"  for i in ticks])
                     label = ax.get_xlabel()
                     ax.set_xlabel(label+" "+unitlog)
@@ -110,16 +109,14 @@ def corner_R(chain,parameter_names=None,point_estimate=None,rename=None,kde=True
                 if namey in logparas:
                     ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
                     ticks = ax.get_yticks()
-                    if len(ticks)>7:
-                        ax.yaxis.set_major_locator(plt.MultipleLocator(2.0))
+                    ax.set_yticks(ticks)
                     ax.set_yticklabels([r"$10^{"+str(int(i))+r"}$"  for i in ticks])
                     label = ax.get_ylabel()
                     ax.set_ylabel(label+" "+unitlog)
                 if namex in logparas:
                     ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
                     ticks = ax.get_xticks()
-                    if len(ticks)>7:
-                        ax.xaxis.set_major_locator(plt.MultipleLocator(2.0))
+                    ax.set_xticks(ticks)
                     ax.set_xticklabels([r"$10^{"+str(int(i))+r"}$"  for i in ticks])
                     label = ax.get_xlabel()
                     ax.set_xlabel(label+" "+unitlog)
@@ -179,8 +176,7 @@ def corner_fast(chain,parameter_names=None,point_estimate=None,rename=None,kde=T
                 if namex in logparas:
                     ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
                     ticks = ax.get_xticks()
-                    if len(ticks)==2:
-                        ax.set_xticks(ticks)
+                    ax.set_xticks(ticks)
                     ax.set_xticklabels([r"$10^{"+str(int(i))+r"}$"  for i in ticks])
                     label = ax.get_xlabel()
                     ax.set_xlabel(label+" "+unitlog)
@@ -208,16 +204,14 @@ def corner_fast(chain,parameter_names=None,point_estimate=None,rename=None,kde=T
                 if namey in logparas:
                     ax.yaxis.set_major_locator(plt.MultipleLocator(1.0))
                     ticks = ax.get_yticks()
-                    if len(ticks)==2:
-                        ax.set_yticks(ticks)
+                    ax.set_yticks(ticks)
                     ax.set_yticklabels([r"$10^{"+str(int(i))+r"}$"  for i in ticks])
                     label = ax.get_ylabel()
                     ax.set_ylabel(label+" "+unitlog)
                 if namex in logparas:
                     ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
                     ticks = ax.get_xticks()
-                    if len(ticks)==2:
-                        ax.set_xticks(ticks)
+                    ax.set_xticks(ticks)
                     ax.set_xticklabels([r"$10^{"+str(int(i))+r"}$"  for i in ticks])
                     label = ax.get_xlabel()
                     ax.set_xlabel(label+" "+unitlog)
