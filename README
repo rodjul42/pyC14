@@ -20,6 +20,10 @@ Dependencies
 * matplotlib
 * xlrd
 
+For the corner plots rpy2 is needed 
+This need R with the packages ks and gplots
+
+
 Installing
 ==========
 
